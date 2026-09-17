@@ -4,6 +4,7 @@
   const POLL_INTERVAL_MS = 4000;
   const WAITING_TIMEOUT_MS = 15 * 60 * 1000; // 15分でポーリングをあきらめる
   const ASK_POLL_INTERVAL_MS = 3000;
+  const CONTINUE_MARK = "この先を知りたければ「次を」とだけ送ってください。";
 
   const screens = {
     email: document.getElementById("screen-email"),
@@ -14,6 +15,10 @@
   function showScreen(name) {
     Object.values(screens).forEach((el) => el.classList.remove("active"));
     screens[name].classList.add("active");
+    if (name === "question") {
+      // Renderが休止していたら、ここで早めに起こしておく（結果は待たない）。
+      fetch("/api/warm").catch(() => {});
+    }
   }
 
   function showError(el, msg) {
@@ -145,9 +150,8 @@
     showScreen("email");
   });
 
-  askSend.addEventListener("click", async () => {
+  function sendQuestion(question) {
     const sid = sessionStorage.getItem("qa_session_id");
-    const question = questionInput.value.trim();
     showError(askErr, "");
     if (!sid) {
       showError(askErr, "セッションが切れています。最初からやり直してください。");
@@ -158,57 +162,76 @@
       return;
     }
     askSend.disabled = true;
-    answerBox.innerHTML = '<p class="muted">考えています…（休止からの再開で1分ほどかかることがあります）</p>';
-    try {
-      const res = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sessionId: sid, question }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
+    answerBox.innerHTML = '<p class="muted">考えています…（休止からの再開で1分ほどかかることがあります。長くても数分お待ちください）</p>';
+    fetch("/api/ask", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: sid, question }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          answerBox.innerHTML = "";
+          showError(askErr, d.error || "送信に失敗しました。");
+          askSend.disabled = false;
+          return;
+        }
+        const data = await res.json();
+        pollAskResult(data.askId);
+      })
+      .catch(() => {
         answerBox.innerHTML = "";
-        showError(askErr, d.error || "送信に失敗しました。");
+        showError(askErr, "通信に失敗しました。時間をおいてもう一度お試しください。");
         askSend.disabled = false;
-        return;
-      }
-      const data = await res.json();
-      pollAskResult(data.askId);
-    } catch (e) {
-      answerBox.innerHTML = "";
-      showError(askErr, "通信に失敗しました。時間をおいてもう一度お試しください。");
-      askSend.disabled = false;
-    }
+      });
+  }
+
+  askSend.addEventListener("click", () => {
+    sendQuestion(questionInput.value.trim());
   });
 
+  function renderAnswer(text) {
+    answerBox.innerHTML = "";
+    const div = document.createElement("div");
+    div.className = "answer";
+    div.textContent = text;
+    answerBox.appendChild(div);
+
+    if (text.includes(CONTINUE_MARK)) {
+      const btn = document.createElement("button");
+      btn.textContent = "続きを見る（次を）";
+      btn.addEventListener("click", () => sendQuestion("次を"));
+      answerBox.appendChild(btn);
+    }
+  }
+
   function pollAskResult(askId) {
-    const timer = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/ask-status?askId=${encodeURIComponent(askId)}`);
-        const data = await res.json();
-        if (data.status === "done") {
-          clearInterval(timer);
-          answerBox.innerHTML = "";
-          const div = document.createElement("div");
-          div.className = "answer";
-          div.textContent = data.answer;
-          answerBox.appendChild(div);
-          askSend.disabled = false;
-        } else if (data.status === "error") {
-          clearInterval(timer);
-          answerBox.innerHTML = "";
-          showError(askErr, data.error || "回答の生成に失敗しました。");
-          askSend.disabled = false;
-        } else if (data.status === "not_found") {
-          clearInterval(timer);
-          answerBox.innerHTML = "";
-          showError(askErr, "回答が見つかりませんでした。もう一度お試しください。");
-          askSend.disabled = false;
-        }
-        // "processing" はそのまま待つ
-      } catch (e) {
-        // 通信エラーは無視して次のポーリングを待つ
-      }
-    }, ASK_POLL_INTERVAL_MS);
+    // setInterval ではなく、前回の結果を見てから次を予約する（重なって連打しないため）。
+    function tick() {
+      fetch(`/api/ask-status?askId=${encodeURIComponent(askId)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.status === "done") {
+            renderAnswer(data.answer);
+            askSend.disabled = false;
+          } else if (data.status === "error") {
+            answerBox.innerHTML = "";
+            showError(askErr, data.error || "回答の生成に失敗しました。");
+            askSend.disabled = false;
+          } else if (data.status === "not_found") {
+            answerBox.innerHTML = "";
+            showError(askErr, "回答が見つかりませんでした。もう一度お試しください。");
+            askSend.disabled = false;
+          } else {
+            // "processing" はそのまま待って、次のポーリングを予約する
+            setTimeout(tick, ASK_POLL_INTERVAL_MS);
+          }
+        })
+        .catch(() => {
+          // 通信エラーは無視して次のポーリングを予約する
+          setTimeout(tick, ASK_POLL_INTERVAL_MS);
+        });
+    }
+    tick();
   }
 })();

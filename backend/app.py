@@ -17,7 +17,7 @@ r"""
 索引ファイルを作り直したときは、scripts/upload_release_assets.py で
 GitHub Releases（タグ index-data-v1）へ再アップロードすること。
 """
-import os, sys, io
+import os, sys, io, threading
 from pathlib import Path
 from flask import Flask, request, jsonify
 
@@ -61,6 +61,12 @@ print(f"索引 {IDX.N:,} 記事。準備完了。", flush=True)
 
 app = Flask(__name__)
 
+# セッション（ブラウザ側のsessionId）ごとに、直前の回答の文脈（hits/level/mode/q）を覚えておく。
+# 「次を」で続きを出すために必要。Renderは無料プランで単一インスタンスなので、
+# プロセス内メモリで十分（複数インスタンスに分散されると壊れるので注意）。
+SESSION_CTX = {}
+SESSION_CTX_LOCK = threading.Lock()
+
 
 def check_auth():
     expected = os.environ.get("INTERNAL_SHARED_KEY", "")
@@ -80,15 +86,23 @@ def ask():
 
     data = request.get_json(silent=True) or {}
     q = (data.get("question") or "").strip()
+    session_id = (data.get("session_id") or "").strip()
     if not q:
         return jsonify(error="question is empty"), 400
     if len(q) > 2000:
         return jsonify(error="question too long"), 400
 
+    with SESSION_CTX_LOCK:
+        deepen_ctx = SESSION_CTX.get(session_id) if session_id else None
+
     try:
-        text, ctx = mn.answer(q, IDX)
+        text, ctx = mn.answer(q, IDX, deepen_ctx=deepen_ctx)
     except Exception as e:
         return jsonify(error=f"internal error: {e}"), 500
+
+    if session_id and ctx is not None:
+        with SESSION_CTX_LOCK:
+            SESSION_CTX[session_id] = ctx
 
     return jsonify(answer=text)
 
@@ -116,6 +130,18 @@ EMAIL_HTML_TMPL = """\
   </p>
 </div>
 """
+
+
+@app.route("/end-session", methods=["POST"])
+def end_session():
+    if not check_auth():
+        return jsonify(error="unauthorized"), 401
+    data = request.get_json(silent=True) or {}
+    session_id = (data.get("session_id") or "").strip()
+    if session_id:
+        with SESSION_CTX_LOCK:
+            SESSION_CTX.pop(session_id, None)
+    return jsonify(ok=True)
 
 
 @app.route("/send-verification-email", methods=["POST"])

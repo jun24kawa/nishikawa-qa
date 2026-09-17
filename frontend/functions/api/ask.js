@@ -1,7 +1,10 @@
 // POST /api/ask  { sessionId, question }
-// 確認済みセッションだけ受け付ける。Renderの回答エンジンは起き上がりに時間がかかることが
-// あるため、ここでは待たずに { askId } を返し、実際の問い合わせはバックグラウンドで進める。
-// 結果は ask-status.js をポーリングして取りに来る。
+// 確認済みセッションだけ受け付ける。ここでは Render を呼ばず、D1 に「処理待ち」の行を
+// 作って { askId } を返すだけ。実際に Render を呼ぶのは ask-status.js（フロントのポーリング）
+// 側で行う。理由：Renderが休止から起きるのに1分以上かかることがあり、Cloudflare Pages
+// Functions の waitUntil（バックグラウンド処理）には時間の上限があるため、そこに賭けると
+// 「起きるのに時間がかかった日だけ何も起きない」という事故が起きる（2026-09-18に発生）。
+// ポーリングのたびに短い時間だけ試す方式に変えることで、何回再試行しても必ず前に進む。
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -42,37 +45,5 @@ export async function onRequestPost(context) {
      VALUES (?, ?, ?, 'processing', datetime('now'))`
   ).bind(askId, sessionId, question).run();
 
-  context.waitUntil(processAsk(env, askId, question));
-
   return Response.json({ askId });
-}
-
-async function processAsk(env, askId, question) {
-  try {
-    const upstream = await fetch(`${env.RENDER_BACKEND_URL}/ask`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "X-Internal-Key": env.INTERNAL_SHARED_KEY,
-      },
-      body: JSON.stringify({ question }),
-      signal: AbortSignal.timeout(170000), // Renderの起き上がり待ちを見込んだ余裕
-    });
-
-    if (!upstream.ok) {
-      await env.DB.prepare(
-        `UPDATE asks SET status = 'error', error = ? WHERE id = ?`
-      ).bind(`回答エンジンがエラーを返しました（${upstream.status}）。`, askId).run();
-      return;
-    }
-
-    const data = await upstream.json();
-    await env.DB.prepare(
-      `UPDATE asks SET status = 'done', answer = ? WHERE id = ?`
-    ).bind(data.answer || "", askId).run();
-  } catch (e) {
-    await env.DB.prepare(
-      `UPDATE asks SET status = 'error', error = ? WHERE id = ?`
-    ).bind("回答エンジンに接続できませんでした。時間をおいてもう一度お試しください。", askId).run();
-  }
 }
