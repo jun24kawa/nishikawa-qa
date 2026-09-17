@@ -85,92 +85,12 @@ def ask():
     if len(q) > 2000:
         return jsonify(error="question too long"), 400
 
-    debug = bool(data.get("debug"))
-    dbg = {}
-    if debug:
-        import numpy as np
-        variants, mode = mn.expand_query(mn.get_api_key(), q)
-        hits = IDX.search_multi(variants)
-
-        # search_multi を手動で1手ずつ追う
-        manual_best = np.zeros(IDX.N, dtype=np.float64)
-        per_variant = []
-        for v in variants:
-            sc_v = IDX._scores(v)
-            per_variant.append({
-                "variant": v,
-                "nonzero": int((sc_v > 0).sum()),
-                "nan_count": int(np.isnan(sc_v).sum()),
-                "max": float(np.nanmax(sc_v)) if sc_v.size else None,
-            })
-            manual_best = np.maximum(manual_best, sc_v)
-        manual_nonzero = int((manual_best > 0).sum())
-        manual_nan = int(np.isnan(manual_best).sum())
-        order = np.argsort(manual_best)[::-1][:30]
-        manual_hits_count = int((manual_best[order] > 0).sum())
-        top30_raw = manual_best[order][:10].tolist()
-        order_first10 = order[:10].tolist()
-        direct_top_via_sort = sorted(manual_best.tolist(), reverse=True)[:10]
-
-        sample_ng = mn.char_ngrams(q)[:5]
-        ng_lookup = {g: IDX.vocab.get(g) for g in sample_ng}
-        dbg = {
-            "received_question_repr": repr(q),
-            "received_question_len": len(q),
-            "variants": variants,
-            "mode": mode,
-            "hits_count": len(hits),
-            "top_hits": [{"score": s, "url": m.get("url") or m.get("title")} for s, m in hits[:5]],
-            "per_variant": per_variant,
-            "manual_best_nonzero": manual_nonzero,
-            "manual_best_nan": manual_nan,
-            "manual_hits_count": manual_hits_count,
-            "top30_raw": top30_raw,
-            "order_first10": order_first10,
-            "direct_top_via_sort": direct_top_via_sort,
-            "index_dir": str(mn.INDEX_DIR),
-            "file_sizes": {f: (mn.INDEX_DIR / f).stat().st_size for f in ["mini_index_lex.npz", "mini_index_meta.jsonl", "mini_index_vocab.json"]},
-            "vocab_size": len(IDX.vocab),
-            "idf_shape": list(IDX.idf.shape),
-            "idf_sample": IDX.idf[:5].tolist(),
-            "idf_nonzero_count": int((IDX.idf != 0).sum()),
-            "indptr_shape": list(IDX.indptr.shape),
-            "p_docs_shape": list(IDX.p_docs.shape),
-            "sample_ngrams": sample_ng,
-            "sample_ngram_vocab_lookup": ng_lookup,
-            "p_wts_shape": list(IDX.p_wts.shape),
-            "p_wts_sample": IDX.p_wts[:5].tolist(),
-            "p_wts_dtype": str(IDX.p_wts.dtype),
-            "p_docs_dtype": str(IDX.p_docs.dtype),
-            "indptr_dtype": str(IDX.indptr.dtype),
-        }
-        try:
-            import resource
-            dbg["max_rss_mb"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
-        except Exception as e:
-            dbg["max_rss_mb_error"] = str(e)
-        raw_scores = IDX._scores(q)
-        dbg["raw_scores_nonzero"] = int((raw_scores > 0).sum())
-        dbg["raw_scores_max"] = float(raw_scores.max())
-        dbg["raw_scores_dtype"] = str(raw_scores.dtype)
-        dbg["raw_scores_shape"] = list(raw_scores.shape)
-        dbg["N"] = IDX.N
-        vi_kyoshi = IDX.vocab.get("教師")
-        if vi_kyoshi is not None:
-            s, e = int(IDX.indptr[vi_kyoshi]), int(IDX.indptr[vi_kyoshi + 1])
-            dbg["kyoshi_vocab_index"] = vi_kyoshi
-            dbg["kyoshi_range"] = [s, e]
-            dbg["kyoshi_doc_count"] = e - s
-            dbg["kyoshi_sample_docs"] = IDX.p_docs[s:s + 5].tolist()
-            dbg["kyoshi_sample_wts"] = IDX.p_wts[s:s + 5].tolist()
-            dbg["kyoshi_idf"] = float(IDX.idf[vi_kyoshi])
-
     try:
         text, ctx = mn.answer(q, IDX)
     except Exception as e:
-        return jsonify(error=f"internal error: {e}", debug=dbg), 500
+        return jsonify(error=f"internal error: {e}"), 500
 
-    return jsonify(answer=text, debug=dbg)
+    return jsonify(answer=text)
 
 
 EMAIL_TEXT_TMPL = """今、あなたはオンラインゼミ生にのみ公開されている質問応答システムにアクセスしましたか？
