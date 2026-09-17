@@ -88,8 +88,11 @@ def ask():
     debug = bool(data.get("debug"))
     dbg = {}
     if debug:
+        import numpy as np
         variants, mode = mn.expand_query(mn.get_api_key(), q)
         hits = IDX.search_multi(variants)
+        sample_ng = mn.char_ngrams(q)[:5]
+        ng_lookup = {g: IDX.vocab.get(g) for g in sample_ng}
         dbg = {
             "received_question_repr": repr(q),
             "received_question_len": len(q),
@@ -97,6 +100,16 @@ def ask():
             "mode": mode,
             "hits_count": len(hits),
             "top_hits": [{"score": s, "url": m.get("url") or m.get("title")} for s, m in hits[:5]],
+            "index_dir": str(mn.INDEX_DIR),
+            "file_sizes": {f: (mn.INDEX_DIR / f).stat().st_size for f in ["mini_index_lex.npz", "mini_index_meta.jsonl", "mini_index_vocab.json"]},
+            "vocab_size": len(IDX.vocab),
+            "idf_shape": list(IDX.idf.shape),
+            "idf_sample": IDX.idf[:5].tolist(),
+            "idf_nonzero_count": int((IDX.idf != 0).sum()),
+            "indptr_shape": list(IDX.indptr.shape),
+            "p_docs_shape": list(IDX.p_docs.shape),
+            "sample_ngrams": sample_ng,
+            "sample_ngram_vocab_lookup": ng_lookup,
         }
 
     try:
