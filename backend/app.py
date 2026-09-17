@@ -116,6 +116,12 @@ def ask():
             "p_docs_dtype": str(IDX.p_docs.dtype),
             "indptr_dtype": str(IDX.indptr.dtype),
         }
+        raw_scores = IDX._scores(q)
+        dbg["raw_scores_nonzero"] = int((raw_scores > 0).sum())
+        dbg["raw_scores_max"] = float(raw_scores.max())
+        dbg["raw_scores_dtype"] = str(raw_scores.dtype)
+        dbg["raw_scores_shape"] = list(raw_scores.shape)
+        dbg["N"] = IDX.N
         vi_kyoshi = IDX.vocab.get("教師")
         if vi_kyoshi is not None:
             s, e = int(IDX.indptr[vi_kyoshi]), int(IDX.indptr[vi_kyoshi + 1])
