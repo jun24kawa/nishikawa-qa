@@ -2,12 +2,15 @@ name = "nishikawa-qa"
 pages_build_output_dir = "public"
 compatibility_date = "2024-09-23"
 
-# D1データベースの紐付け（binding = "DB"）は、この設定ファイルには書かない。
-# Cloudflareダッシュボードの Pages プロジェクト → Settings → Functions → D1 database bindings
-# で、変数名 "DB" として、D1データベース作成後に紐付ける（セットアップ手順.md ステップ4）。
+[[d1_databases]]
+binding = "DB"
+database_name = "nishikawa-qa-db"
+database_id = "36effe0f-d78b-4da4-a859-b6a1033ec032"
 
-# 以下も秘密情報なので、この設定ファイルには書かない。
-# Cloudflareダッシュボードの Pages プロジェクト → Settings → Environment variables で設定する：
-#   RENDER_BACKEND_URL   例）https://nishikawa-qa-backend.onrender.com
-#   INTERNAL_SHARED_KEY  Renderと共有する合言葉（Render側のINTERNAL_SHARED_KEYと同じ値）
-#   SITE_BASE_URL        このサイト自身のURL（例）https://nishikawa-qa.pages.dev
+[vars]
+SITE_BASE_URL = "https://nishikawa-qa.pages.dev"
+# RENDER_BACKEND_URL は、Renderのサービスを作った後、ここに追記して push する。
+
+# INTERNAL_SHARED_KEY は秘密情報なので、ここには書かない。
+# Cloudflareダッシュボードの Pages プロジェクト → Settings → Variables and secrets で
+# Type=Secret として設定済み（セットアップ手順.md ステップ4）。
