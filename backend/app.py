@@ -110,7 +110,21 @@ def ask():
             "p_docs_shape": list(IDX.p_docs.shape),
             "sample_ngrams": sample_ng,
             "sample_ngram_vocab_lookup": ng_lookup,
+            "p_wts_shape": list(IDX.p_wts.shape),
+            "p_wts_sample": IDX.p_wts[:5].tolist(),
+            "p_wts_dtype": str(IDX.p_wts.dtype),
+            "p_docs_dtype": str(IDX.p_docs.dtype),
+            "indptr_dtype": str(IDX.indptr.dtype),
         }
+        vi_kyoshi = IDX.vocab.get("教師")
+        if vi_kyoshi is not None:
+            s, e = int(IDX.indptr[vi_kyoshi]), int(IDX.indptr[vi_kyoshi + 1])
+            dbg["kyoshi_vocab_index"] = vi_kyoshi
+            dbg["kyoshi_range"] = [s, e]
+            dbg["kyoshi_doc_count"] = e - s
+            dbg["kyoshi_sample_docs"] = IDX.p_docs[s:s + 5].tolist()
+            dbg["kyoshi_sample_wts"] = IDX.p_wts[s:s + 5].tolist()
+            dbg["kyoshi_idf"] = float(IDX.idf[vi_kyoshi])
 
     try:
         text, ctx = mn.answer(q, IDX)
