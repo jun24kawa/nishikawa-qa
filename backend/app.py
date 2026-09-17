@@ -106,7 +106,7 @@ def ask():
             manual_best = np.maximum(manual_best, sc_v)
         manual_nonzero = int((manual_best > 0).sum())
         manual_nan = int(np.isnan(manual_best).sum())
-        order = np.argsort(-manual_best)[:30]
+        order = np.argsort(manual_best)[::-1][:30]
         manual_hits_count = int((manual_best[order] > 0).sum())
         top30_raw = manual_best[order][:10].tolist()
         order_first10 = order[:10].tolist()
@@ -144,6 +144,11 @@ def ask():
             "p_docs_dtype": str(IDX.p_docs.dtype),
             "indptr_dtype": str(IDX.indptr.dtype),
         }
+        try:
+            import resource
+            dbg["max_rss_mb"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+        except Exception as e:
+            dbg["max_rss_mb_error"] = str(e)
         raw_scores = IDX._scores(q)
         dbg["raw_scores_nonzero"] = int((raw_scores > 0).sum())
         dbg["raw_scores_max"] = float(raw_scores.max())

@@ -166,7 +166,7 @@ class Index:
         best = np.zeros(self.N, dtype=np.float64)
         for v in variants:
             best = np.maximum(best, self._scores(v))
-        order = np.argsort(-best)[:k]
+        order = np.argsort(best)[::-1][:k]
         return [(float(best[i]), self.meta[i]) for i in order if best[i] > 0]
 
 
