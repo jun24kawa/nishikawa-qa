@@ -3,7 +3,7 @@ r"""
 質問応答システムのバックエンド（Render で常時起動する想定）。
 
 役割：
-- 起動時に、索引ファイル（約194MB）が無ければ Cloudflare R2 からダウンロードする。
+- 起動時に、索引ファイル（約194MB）が無ければ GitHub Releases からダウンロードする。
 - POST /ask を、Cloudflare Pages Functions からの呼び出しだけに限定して受け付け、
   ミニ西川の回答エンジン（mini_nishikawa_core.py）を呼んで JSON で返す。
 - GET /health はRenderのヘルスチェック・起動確認用（認証不要、何もしない）。
@@ -11,10 +11,11 @@ r"""
 環境変数（Renderのダッシュボードで設定する）：
   ANTHROPIC_API_KEY   … Claude APIキー
   INTERNAL_SHARED_KEY … Cloudflare側と共有する合言葉（/ask 呼び出しの認証用）
-  R2_ENDPOINT         … 例 https://<account_id>.r2.cloudflarestorage.com
-  R2_BUCKET           … 索引ファイルを置いたバケット名
-  R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY … R2のAPIトークン（S3互換）
+  GMAIL_FROM / GMAIL_APP_PASSWORD … 確認メール送信用（mailer.py参照）
   INDEX_DIR           … 省略可。既定はこのファイルと同じ場所の index_data/
+
+索引ファイルを作り直したときは、scripts/upload_release_assets.py で
+GitHub Releases（タグ index-data-v1）へ再アップロードすること。
 """
 import os, sys, io
 from pathlib import Path
@@ -22,37 +23,30 @@ from flask import Flask, request, jsonify
 
 INDEX_DIR = Path(os.environ.get("INDEX_DIR", str(Path(__file__).resolve().parent / "index_data")))
 INDEX_FILES = ["mini_index_lex.npz", "mini_index_meta.jsonl", "mini_index_vocab.json"]
+RELEASE_BASE = "https://github.com/jun24kawa/nishikawa-qa/releases/download/index-data-v1"
 
 
 def ensure_index_files():
-    """索引ファイルがローカルに無ければ R2 から取ってくる。"""
+    """索引ファイルがローカルに無ければ GitHub Releases から取ってくる（公開URL、認証不要）。"""
+    import httpx
+
     INDEX_DIR.mkdir(parents=True, exist_ok=True)
     missing = [f for f in INDEX_FILES if not (INDEX_DIR / f).exists()]
     if not missing:
         print(f"索引ファイルは既にあります: {INDEX_DIR}", flush=True)
         return
 
-    endpoint = os.environ.get("R2_ENDPOINT", "")
-    bucket = os.environ.get("R2_BUCKET", "")
-    key_id = os.environ.get("R2_ACCESS_KEY_ID", "")
-    secret = os.environ.get("R2_SECRET_ACCESS_KEY", "")
-    if not (endpoint and bucket and key_id and secret):
-        raise RuntimeError(
-            "索引ファイルが無く、R2の接続情報（R2_ENDPOINT/R2_BUCKET/R2_ACCESS_KEY_ID/"
-            "R2_SECRET_ACCESS_KEY）も設定されていません。Renderの環境変数を確認してください。"
-        )
-
-    import boto3
-    s3 = boto3.client(
-        "s3", endpoint_url=endpoint,
-        aws_access_key_id=key_id, aws_secret_access_key=secret,
-        region_name="auto",
-    )
-    for f in missing:
-        dest = INDEX_DIR / f
-        print(f"R2からダウンロード中: {f} …", flush=True)
-        s3.download_file(bucket, f, str(dest))
-        print(f"  完了 {f}（{dest.stat().st_size:,} bytes）", flush=True)
+    with httpx.Client(follow_redirects=True, timeout=300) as c:
+        for f in missing:
+            url = f"{RELEASE_BASE}/{f}"
+            dest = INDEX_DIR / f
+            print(f"ダウンロード中: {f} … ({url})", flush=True)
+            with c.stream("GET", url) as r:
+                r.raise_for_status()
+                with dest.open("wb") as out:
+                    for chunk in r.iter_bytes(chunk_size=1 << 20):
+                        out.write(chunk)
+            print(f"  完了 {f}（{dest.stat().st_size:,} bytes）", flush=True)
 
 
 ensure_index_files()

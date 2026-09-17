@@ -11,14 +11,6 @@ services:
         sync: false
       - key: INTERNAL_SHARED_KEY
         sync: false
-      - key: R2_ENDPOINT
-        sync: false
-      - key: R2_BUCKET
-        sync: false
-      - key: R2_ACCESS_KEY_ID
-        sync: false
-      - key: R2_SECRET_ACCESS_KEY
-        sync: false
       - key: GMAIL_FROM
         sync: false
       - key: GMAIL_APP_PASSWORD
