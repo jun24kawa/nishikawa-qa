@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+backend/index_data/
+.DS_Store

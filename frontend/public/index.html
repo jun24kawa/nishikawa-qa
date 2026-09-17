@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>質問応答システム（edusalon生限定）</title>
+<style>
+:root{
+  --bg:#fbfbf9; --fg:#1b1b1b; --muted:#6b6b6b; --rule:#e2e0da;
+  --link:#8a4b2f; --note-bg:#fff4e5; --note-fg:#8a5a1a; --note-bd:#f0d9b5;
+  --card:#ffffff; --err-bg:#fdeceb; --err-fg:#a33; --err-bd:#f3c9c5;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#1a1a19; --fg:#e6e4df; --muted:#9a978f; --rule:#38352f;
+    --link:#e0a982; --note-bg:#2c2416; --note-fg:#e8c895; --note-bd:#4a3c22;
+    --card:#232220; --err-bg:#3a2220; --err-fg:#e79b96; --err-bd:#5a332f;
+  }
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:"Hiragino Mincho ProN","Hiragino Mincho Pro","Yu Mincho","YuMincho","Noto Serif JP",serif;
+  line-height:1.9; font-size:17px;
+}
+.wrap{max-width:34em; margin:0 auto; padding:2.4rem 1.3rem 6rem;}
+h1{font-size:1.3rem; line-height:1.5; margin:.2rem 0 1.6rem; font-weight:700;}
+p{margin:0 0 1.1rem;}
+.note{
+  background:var(--note-bg); color:var(--note-fg); border:1px solid var(--note-bd);
+  border-radius:8px; padding:.7rem 1rem; margin:0 0 1.6rem; font-size:.92rem; line-height:1.7;
+}
+.err{
+  background:var(--err-bg); color:var(--err-fg); border:1px solid var(--err-bd);
+  border-radius:8px; padding:.7rem 1rem; margin:0 0 1.2rem; font-size:.92rem; line-height:1.7;
+  display:none;
+}
+input[type=email], textarea{
+  width:100%; font:inherit; font-size:1rem; padding:.7rem .8rem; border:1px solid var(--rule);
+  border-radius:6px; background:var(--card); color:var(--fg); margin:0 0 1rem;
+}
+textarea{min-height:8rem; resize:vertical;}
+button{
+  font:inherit; font-size:.98rem; padding:.7rem 1.4rem; border-radius:6px; border:1px solid var(--rule);
+  background:var(--card); color:var(--fg); cursor:pointer; margin:0 .6rem .6rem 0;
+}
+button.primary{background:var(--link); color:#fff; border-color:var(--link);}
+button:disabled{opacity:.5; cursor:default;}
+.answer{
+  background:var(--card); border:1px solid var(--rule); border-radius:8px;
+  padding:1.1rem 1.2rem; margin:1.6rem 0; white-space:pre-wrap; font-size:.98rem;
+}
+.muted{color:var(--muted); font-size:.9rem;}
+.screen{display:none;}
+.screen.active{display:block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div id="screen-email" class="screen active">
+  <h1>質問応答システム</h1>
+  <p>本質問応答システムは西川純のオンラインゼミ生にのみ公開しています。</p>
+  <p>現在、オンラインゼミ生の方はオンラインゼミで登録しているメールアドレスを入力してください。入力すると、そのメールアドレスに確認メールを送ります。</p>
+  <div id="email-err" class="err"></div>
+  <input type="email" id="email-input" placeholder="メールアドレス" autocomplete="email">
+  <div>
+    <button class="primary" id="email-submit">送信する</button>
+  </div>
+</div>
+
+<div id="screen-waiting" class="screen">
+  <h1>確認メールを送信しました</h1>
+  <p>入力したメールアドレス宛に確認メールを送りました。メールを開き、「はい」を押してください。押していただくと、この画面が自動で切り替わります。</p>
+  <p class="muted" id="waiting-status">確認をお待ちしています…</p>
+  <div>
+    <button id="waiting-back">メールアドレスの入力からやり直す</button>
+  </div>
+</div>
+
+<div id="screen-question" class="screen">
+  <h1>質問応答システム</h1>
+  <div class="note">しばらく質問がないと一旦停止します。次の質問を受けても1分ぐらいかかる場合があります。</div>
+  <div id="ask-err" class="err"></div>
+  <textarea id="question-input" placeholder="質問を入力してください"></textarea>
+  <div>
+    <button class="primary" id="ask-send">質問を送る</button>
+    <button id="ask-clear">入力画面を白紙に戻す</button>
+    <button id="ask-end">質問応答システムを終了する</button>
+  </div>
+  <div id="answer-box"></div>
+</div>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
