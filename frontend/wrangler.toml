@@ -9,7 +9,7 @@ database_id = "36effe0f-d78b-4da4-a859-b6a1033ec032"
 
 [vars]
 SITE_BASE_URL = "https://nishikawa-qa.pages.dev"
-# RENDER_BACKEND_URL は、Renderのサービスを作った後、ここに追記して push する。
+RENDER_BACKEND_URL = "https://nishikawa-qa-backend.onrender.com"
 
 # INTERNAL_SHARED_KEY は秘密情報なので、ここには書かない。
 # Cloudflareダッシュボードの Pages プロジェクト → Settings → Variables and secrets で
