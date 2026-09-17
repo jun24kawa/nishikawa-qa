@@ -13,5 +13,5 @@ services:
         sync: false
       - key: GMAIL_FROM
         sync: false
-      - key: GMAIL_APP_PASSWORD
+      - key: SENDGRID_API_KEY
         sync: false

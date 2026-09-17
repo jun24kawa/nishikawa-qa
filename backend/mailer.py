@@ -1,41 +1,40 @@
 # -*- coding: utf-8 -*-
 r"""
-確認メールの送信（Gmail SMTP、アプリパスワード）。
+確認メールの送信（SendGrid、HTTP API経由）。
 
-`メール設定.ps1`（PC月次点検の通知メール）と同じ仕組みを使い回す。
-違いは、パスワードをDPAPIではなく環境変数（Renderのダッシュボードで設定）から読む点。
+Renderの無料プランはSMTP（Gmail送信に使うポート）への接続をブロックしているため、
+2026-09-17、smtplib（Gmail直接）からSendGridのHTTP APIへ切り替えた。
+送信元アドレス自体は、引き続き西川さんのGmailアドレス（Single Sender Verification済み）を使う。
 
 環境変数：
-  GMAIL_FROM       … 送信元のGmailアドレス
-  GMAIL_APP_PASSWORD … Googleの「アプリパスワード」（16文字、スペースは有無どちらでも可）
+  SENDGRID_API_KEY … SendGridのAPIキー
+  GMAIL_FROM       … 送信元アドレス（SendGridでSingle Sender Verification済みのもの）
 """
 import os
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.utils import formataddr
+import httpx
 
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
+SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send"
 
 
 def send_mail(to_addr: str, subject: str, body_text: str, body_html: str = "") -> None:
+    api_key = os.environ.get("SENDGRID_API_KEY", "").strip()
     from_addr = os.environ.get("GMAIL_FROM", "").strip()
-    app_password = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "").strip()
-    if not from_addr or not app_password:
-        raise RuntimeError("GMAIL_FROM / GMAIL_APP_PASSWORD が設定されていません。")
+    if not api_key or not from_addr:
+        raise RuntimeError("SENDGRID_API_KEY / GMAIL_FROM が設定されていません。")
 
+    content = [{"type": "text/plain", "value": body_text}]
     if body_html:
-        msg = MIMEMultipart("alternative")
-        msg.attach(MIMEText(body_text, "plain", "utf-8"))
-        msg.attach(MIMEText(body_html, "html", "utf-8"))
-    else:
-        msg = MIMEText(body_text, "plain", "utf-8")
-    msg["Subject"] = subject
-    msg["From"] = formataddr(("西川純の質問応答システム", from_addr))
-    msg["To"] = to_addr
+        content.append({"type": "text/html", "value": body_html})
 
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-        server.starttls()
-        server.login(from_addr, app_password)
-        server.sendmail(from_addr, [to_addr], msg.as_string())
+    payload = {
+        "personalizations": [{"to": [{"email": to_addr}]}],
+        "from": {"email": from_addr, "name": "西川純の質問応答システム"},
+        "subject": subject,
+        "content": content,
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+    with httpx.Client(timeout=30) as c:
+        r = c.post(SENDGRID_URL, headers=headers, json=payload)
+        if r.status_code >= 300:
+            raise RuntimeError(f"SendGrid送信失敗 {r.status_code}: {r.text[:500]}")
