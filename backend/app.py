@@ -91,6 +91,24 @@ def ask():
         import numpy as np
         variants, mode = mn.expand_query(mn.get_api_key(), q)
         hits = IDX.search_multi(variants)
+
+        # search_multi を手動で1手ずつ追う
+        manual_best = np.zeros(IDX.N, dtype=np.float64)
+        per_variant = []
+        for v in variants:
+            sc_v = IDX._scores(v)
+            per_variant.append({
+                "variant": v,
+                "nonzero": int((sc_v > 0).sum()),
+                "nan_count": int(np.isnan(sc_v).sum()),
+                "max": float(np.nanmax(sc_v)) if sc_v.size else None,
+            })
+            manual_best = np.maximum(manual_best, sc_v)
+        manual_nonzero = int((manual_best > 0).sum())
+        manual_nan = int(np.isnan(manual_best).sum())
+        order = np.argsort(-manual_best)[:30]
+        manual_hits_count = int((manual_best[order] > 0).sum())
+
         sample_ng = mn.char_ngrams(q)[:5]
         ng_lookup = {g: IDX.vocab.get(g) for g in sample_ng}
         dbg = {
@@ -100,6 +118,10 @@ def ask():
             "mode": mode,
             "hits_count": len(hits),
             "top_hits": [{"score": s, "url": m.get("url") or m.get("title")} for s, m in hits[:5]],
+            "per_variant": per_variant,
+            "manual_best_nonzero": manual_nonzero,
+            "manual_best_nan": manual_nan,
+            "manual_hits_count": manual_hits_count,
             "index_dir": str(mn.INDEX_DIR),
             "file_sizes": {f: (mn.INDEX_DIR / f).stat().st_size for f in ["mini_index_lex.npz", "mini_index_meta.jsonl", "mini_index_vocab.json"]},
             "vocab_size": len(IDX.vocab),
