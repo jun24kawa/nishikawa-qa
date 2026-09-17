@@ -108,6 +108,9 @@ def ask():
         manual_nan = int(np.isnan(manual_best).sum())
         order = np.argsort(-manual_best)[:30]
         manual_hits_count = int((manual_best[order] > 0).sum())
+        top30_raw = manual_best[order][:10].tolist()
+        order_first10 = order[:10].tolist()
+        direct_top_via_sort = sorted(manual_best.tolist(), reverse=True)[:10]
 
         sample_ng = mn.char_ngrams(q)[:5]
         ng_lookup = {g: IDX.vocab.get(g) for g in sample_ng}
@@ -122,6 +125,9 @@ def ask():
             "manual_best_nonzero": manual_nonzero,
             "manual_best_nan": manual_nan,
             "manual_hits_count": manual_hits_count,
+            "top30_raw": top30_raw,
+            "order_first10": order_first10,
+            "direct_top_via_sort": direct_top_via_sort,
             "index_dir": str(mn.INDEX_DIR),
             "file_sizes": {f: (mn.INDEX_DIR / f).stat().st_size for f in ["mini_index_lex.npz", "mini_index_meta.jsonl", "mini_index_vocab.json"]},
             "vocab_size": len(IDX.vocab),
