@@ -85,12 +85,26 @@ def ask():
     if len(q) > 2000:
         return jsonify(error="question too long"), 400
 
+    debug = bool(data.get("debug"))
+    dbg = {}
+    if debug:
+        variants, mode = mn.expand_query(mn.get_api_key(), q)
+        hits = IDX.search_multi(variants)
+        dbg = {
+            "received_question_repr": repr(q),
+            "received_question_len": len(q),
+            "variants": variants,
+            "mode": mode,
+            "hits_count": len(hits),
+            "top_hits": [{"score": s, "url": m.get("url") or m.get("title")} for s, m in hits[:5]],
+        }
+
     try:
         text, ctx = mn.answer(q, IDX)
     except Exception as e:
-        return jsonify(error=f"internal error: {e}"), 500
+        return jsonify(error=f"internal error: {e}", debug=dbg), 500
 
-    return jsonify(answer=text)
+    return jsonify(answer=text, debug=dbg)
 
 
 EMAIL_TEXT_TMPL = """今、あなたはオンラインゼミ生にのみ公開されている質問応答システムにアクセスしましたか？
