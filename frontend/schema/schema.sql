@@ -37,3 +37,12 @@ CREATE TABLE IF NOT EXISTS asks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_asks_session ON asks(session_id);
+
+-- 本の公開サイト（jun24kawa.github.io、別ドメインの静的サイト）の「ご意見箱」投稿。
+-- 名前・メールアドレスは受け取らない設計。2026-09-19、Cloudflareダッシュボードのコンソールで作成済み。
+CREATE TABLE IF NOT EXISTS opinions (
+  id         TEXT PRIMARY KEY,
+  message    TEXT NOT NULL,
+  ip         TEXT,             -- 簡易レート制限用
+  created_at TEXT NOT NULL
+);
