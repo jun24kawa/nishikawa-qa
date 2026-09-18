@@ -162,7 +162,7 @@
       return;
     }
     askSend.disabled = true;
-    answerBox.innerHTML = '<p class="muted">考えています…（休止からの再開で1分ほどかかることがあります。長くても数分お待ちください）</p>';
+    answerBox.innerHTML = '<p class="loading"><span class="spinner" aria-hidden="true"></span>考えています…（休止からの再開で1分ほどかかることがあります。長くても数分お待ちください）</p>';
     fetch("/api/ask", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -199,6 +199,7 @@
 
     if (text.includes(CONTINUE_MARK)) {
       const btn = document.createElement("button");
+      btn.className = "primary continue-btn";
       btn.textContent = "続きを見る（次を）";
       btn.addEventListener("click", () => sendQuestion("次を"));
       answerBox.appendChild(btn);
