@@ -104,7 +104,14 @@ def ask():
         with SESSION_CTX_LOCK:
             SESSION_CTX[session_id] = ctx
 
-    return jsonify(answer=text)
+    # 材料不足で答えられなかった場合（mini_nishikawa_core.answer が返す2種類の
+    # 断り文言は、どちらも同じ書き出しで始まる）。Cloudflare側でD1に記録し、
+    # あとで西川さんへの本の推薦材料に使う。Renderのローカルファイルへのgapログ
+    # （mini_nishikawa_core.log_gap）は、無料プランの再起動で消えてしまうため
+    # 当てにできない（2026-09-19判明）。
+    declined = text.startswith("今は、その問いにきちんとお答えできません")
+
+    return jsonify(answer=text, declined=declined)
 
 
 EMAIL_TEXT_TMPL = """今、あなたはオンラインゼミ生にのみ公開されている質問応答システムにアクセスしましたか？

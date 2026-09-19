@@ -46,3 +46,13 @@ CREATE TABLE IF NOT EXISTS opinions (
   ip         TEXT,             -- 簡易レート制限用
   created_at TEXT NOT NULL
 );
+
+-- ミニ西川が材料不足で答えられなかった質問（西川さんへの本の推薦材料にする）。
+-- 2026-09-19、Cloudflareダッシュボードのコンソールで作成済み。
+-- Renderのローカルファイル（mini_nishikawa_gaps.jsonl）は無料プランの再起動で消えるため、
+-- こちらをあとで見る正本として使う。
+CREATE TABLE IF NOT EXISTS gaps (
+  id         TEXT PRIMARY KEY,
+  question   TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);

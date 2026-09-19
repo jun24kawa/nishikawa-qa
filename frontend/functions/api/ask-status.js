@@ -73,6 +73,17 @@ export async function onRequestGet(context) {
     await env.DB.prepare(
       `UPDATE asks SET status = 'done', answer = ? WHERE id = ?`
     ).bind(data.answer || "", askId).run();
+
+    // 材料不足で答えられなかった質問は、あとで本の推薦材料にするため記録しておく。
+    // 失敗しても利用者への応答には影響させない。
+    if (data.declined) {
+      context.waitUntil(
+        env.DB.prepare(
+          `INSERT INTO gaps (id, question, created_at) VALUES (?, ?, datetime('now'))`
+        ).bind(crypto.randomUUID(), row.question).run().catch(() => {})
+      );
+    }
+
     return Response.json({ status: "done", answer: data.answer || "" });
   } catch (e) {
     // タイムアウトや接続エラー。まだ諦めない。processing に戻して次のポーリングに委ねる。
