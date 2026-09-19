@@ -92,14 +92,14 @@ SYSTEM = """あなたは「ミニ西川」。教育学者・西川純氏（上�
 - あいまいな量の言葉を、具体的な数字に置き換える（「ほんの数年」→「9〜16年」など）。
 - 実務的な話題（お金・住まい・進路）では、原則で止めず、具体的な仕組み・制度・固有名詞・
   金額まで踏み込む。
-- 介護保険・相続税・不動産取引など、法律や制度に直結する話題で、参照材料に「決まっている
-  今後の制度変更」（施行日が決まっている改正）が含まれる場合は、現行制度での答えと、施行日
-  以降の制度での答えを、日付を明記して両方書く（例「今の制度では…。ただし、令和◯年◯月◯日
-  以降は…」）。参照材料にそうした予告が無ければ、無理に触れなくてよい。
-- 介護保険・相続税・不動産取引など、答えが「今の制度」に直接左右される質問で、参照材料だけ
-  では今の制度が確認できない、または材料が古い可能性があるときは、web_search ツールを使って
-  現在の制度を確認してから答える。検索は多くて2〜3回まで。学び合い・教育論・投資の一般論など
-  制度に直結しない話題では、検索を使わない。
+- 介護保険・相続税・不動産取引・退職金や年金など定年前後の手続きといった、法律や制度に直結する
+  話題で、参照材料に「決まっている今後の制度変更」（施行日が決まっている改正）が含まれる場合は、
+  現行制度での答えと、施行日以降の制度での答えを、日付を明記して両方書く（例「今の制度では…。
+  ただし、令和◯年◯月◯日以降は…」）。参照材料にそうした予告が無ければ、無理に触れなくてよい。
+- 介護保険・相続税・不動産取引・退職金や年金など定年前後の手続きといった、答えが「今の制度」に
+  直接左右される質問で、参照材料だけでは今の制度が確認できない、または材料が古い可能性がある
+  ときは、web_search ツールを使って現在の制度を確認してから答える。検索は多くて2〜3回まで。
+  学び合い・教育論・投資の一般論など制度に直結しない話題では、検索を使わない。
 - web_search で調べた内容を使ったときは、「調べてみます」のような検索する旨の前置きは書かず、
   ふだんの回答と同じ体裁で答える。出典欄に、使ったページのURLと、確認した日付を明記する
   （書式：ウェブ … <URL全体>（YYYY-MM-DD確認））。
@@ -212,6 +212,44 @@ def guess_mode_rule(q):
     return "class" if hits >= 2 else "innovator"
 
 
+# 介護・相続・不動産・定年前後の手続きなど、「今の制度」に答えが直接左右される話題。
+# ここに該当し、かつコーパスに西川氏本人の材料が1件も無い質問は、材料ゼロを理由に断らず、
+# web_search だけを頼りに事実として答える特例ルートに乗せる（2026-09-19、西川さん指示）。
+REGULATORY_WORDS = (
+    "介護保険", "介護", "要介護", "要支援",
+    "相続", "相続税", "遺産", "遺言", "遺産分割", "成年後見",
+    "贈与税", "贈与",
+    "不動産", "不動産売却", "不動産購入", "仲介手数料", "固定資産税", "住宅ローン",
+    "退職", "退職金", "退職所得", "定年", "再雇用",
+    "年金", "厚生年金", "国民年金", "遺族年金", "iDeCo", "企業年金",
+    "失業給付", "雇用保険", "健康保険",
+)
+
+
+def is_regulatory_topic(q):
+    return any(w in q for w in REGULATORY_WORDS)
+
+
+# お金に関わる話題の質問には、回答の先頭に固定の免責文を付ける（2026-09-19、西川さん指示）。
+MONEY_WORDS = REGULATORY_WORDS + (
+    "お金", "資産", "投資", "貯金", "貯蓄", "保険", "税金", "家計", "NISA", "株", "投信",
+)
+MONEY_DISCLAIMER = ("お金にかかわることは自己責任です。必ずご自身で調べ、専門家に確認することを"
+                     "お勧めします。我々は何らの責任も取れないことをお忘れなく。")
+
+
+def is_money_topic(q):
+    return any(w in q for w in MONEY_WORDS)
+
+
+NO_MATERIAL_BLOCK = ("この質問については、西川氏本人の意見材料（参照材料）が見つかっていない。"
+                     "ただし、これは制度・手続きに関する事実確認の質問なので、上記の「材料が無ければ"
+                     "DECLINE」という原則の例外として、材料が無いことを理由にDECLINEしない。"
+                     "web_search で現在の制度を確認し、中立的な事実として答える。"
+                     "西川氏本人の意見であるかのようには書かない（「私は…と考えている」等は使わない。"
+                     "「今の制度では…」のように、事実として淡々と書く）。")
+
+
 def expand_query(key, q):
     payload = {
         "model": MODEL_GEN, "max_tokens": 320, "output_config": {"effort": "low"},
@@ -270,7 +308,7 @@ MODE_BLOCK = {
 }
 
 
-def build_user_prompt(q, hits, deepen_from="", mode=""):
+def build_user_prompt(q, hits, deepen_from="", mode="", allow_no_material=False):
     lines = [f"質問: {q}", "", "参照材料（西川のブログ・著書からの抽出。順不同）:", ""]
     for n, (s, m) in enumerate(hits, 1):
         lv = m.get("level") or "不問"
@@ -291,6 +329,9 @@ def build_user_prompt(q, hits, deepen_from="", mode=""):
     if mode in MODE_BLOCK:
         lines.append("")
         lines.append(MODE_BLOCK[mode])
+    if allow_no_material:
+        lines.append("")
+        lines.append(NO_MATERIAL_BLOCK)
     return "\n".join(lines)
 
 
@@ -301,13 +342,13 @@ def split_level(out):
     return "", out
 
 
-def generate(key, q, hits, deepen_from="", mode=""):
+def generate(key, q, hits, deepen_from="", mode="", allow_no_material=False):
     payload = {
         "model": MODEL_GEN, "max_tokens": 1200, "output_config": {"effort": "low"},
         "system": [{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
-        "messages": [{"role": "user", "content": build_user_prompt(q, hits, deepen_from, mode)}],
-        # 介護・相続・不動産など「今の制度」に直結する質問だけ、SYSTEM の指示に従って
-        # Claude自身の判断で使う（2026-09-19、西川さん指示）。$10/1000回＋通常のトークン費用。
+        "messages": [{"role": "user", "content": build_user_prompt(q, hits, deepen_from, mode, allow_no_material)}],
+        # 介護・相続・不動産・定年前後の手続きなど「今の制度」に直結する質問だけ、SYSTEM の指示に
+        # 従ってClaude自身の判断で使う（2026-09-19、西川さん指示）。$10/1000回＋通常のトークン費用。
         "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}],
     }
     return _post(key, payload)
@@ -333,15 +374,20 @@ def answer(q, idx, deepen_ctx=None, mode_override=""):
 
     if deepen_ctx and q.strip() in MORE_WORDS:
         d_mode = mode_override or deepen_ctx.get("mode") or ""
+        d_allow_no_material = deepen_ctx.get("allow_no_material", False)
         try:
             raw = generate(key, deepen_ctx["q"], deepen_ctx["hits"][:POOL],
-                           deepen_from=deepen_ctx.get("level") or "beginner", mode=d_mode)
+                           deepen_from=deepen_ctx.get("level") or "beginner", mode=d_mode,
+                           allow_no_material=d_allow_no_material)
         except Exception as e:
             return (f"続きの生成に失敗しました: {e}", deepen_ctx)
         lv, body = split_level(raw)
+        if is_money_topic(deepen_ctx.get("q", "")):
+            body = MONEY_DISCLAIMER + "\n\n" + body
         return (body, {"hits": deepen_ctx["hits"],
                        "level": lv or LEVEL_NEXT.get(deepen_ctx.get("level"), "advanced"),
-                       "q": deepen_ctx["q"], "mode": d_mode})
+                       "q": deepen_ctx["q"], "mode": d_mode,
+                       "allow_no_material": d_allow_no_material})
 
     variants, mode = expand_query(key, q)
     if not mode:
@@ -350,12 +396,16 @@ def answer(q, idx, deepen_ctx=None, mode_override=""):
         mode = mode_override
     hits = idx.search_multi(variants)
 
-    if not hits:
+    # コーパスに材料が1件も無くても、介護・相続・不動産・定年前後の手続きなど「今の制度」を
+    # 問う質問は、材料ゼロを理由に断らず、web_search 頼りの事実確認ルートに乗せる
+    # （2026-09-19、西川さん指示）。それ以外の話題で材料ゼロなら、これまで通り断る。
+    allow_no_material = (not hits) and is_regulatory_topic(q)
+    if not hits and not allow_no_material:
         log_gap(q, hits, variants)
         return ("今は、その問いにきちんとお答えできません。（関連する記事が見つかりませんでした。記録しました。）", None)
 
     try:
-        raw = generate(key, q, hits[:POOL], mode=mode)
+        raw = generate(key, q, hits[:POOL], mode=mode, allow_no_material=allow_no_material)
     except Exception as e:
         return (f"回答の生成に失敗しました: {e}", None)
 
@@ -366,4 +416,7 @@ def answer(q, idx, deepen_ctx=None, mode_override=""):
                 "改良したらお知らせします。", None)
 
     lv, body = split_level(raw)
-    return (body, {"hits": hits, "level": lv, "q": q, "mode": mode})
+    if is_money_topic(q):
+        body = MONEY_DISCLAIMER + "\n\n" + body
+    return (body, {"hits": hits, "level": lv, "q": q, "mode": mode,
+                   "allow_no_material": allow_no_material})
