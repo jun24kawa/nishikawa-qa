@@ -354,6 +354,37 @@ def generate(key, q, hits, deepen_from="", mode="", allow_no_material=False):
     return _post(key, payload)
 
 
+RECOMMEND_SYSTEM = """あなたは書籍案内係です。西川純氏の質問応答システム「ミニ西川」が、材料不足のため
+答えられなかった質問が渡されます。この質問に関連する、今も入手できる実在の本を1冊だけ、
+web_search で実際に確認してから提案してください。
+
+- 西川純氏本人の著書は対象外（別の著者の、市販されている本を探す）。
+- 検索結果で書名・著者・出版社（分かれば）を確認できたときだけ提案する。
+- 確信が持てない、適切な本が見つからないときは、他には何も書かず NO_MATCH とだけ返す。
+  無理に提案しない方がよい。
+- 見つかったときは、前置き・説明文を書かず、次の1行だけを返す：
+  『書名』（著者、出版社）"""
+
+
+def recommend_book(key, q):
+    """答えられなかった質問について、web_search で確認できた実在の本を1冊だけ提案する。
+    見つからなければ空文字を返す（無理に提案しない）。LLMの記憶だけに頼った自由生成による
+    ハルシネーションを避けるため、必ずweb_searchの結果に基づかせる（2026-09-20、西川さん指示）。"""
+    payload = {
+        "model": MODEL_GEN, "max_tokens": 300, "output_config": {"effort": "low"},
+        "system": [{"type": "text", "text": RECOMMEND_SYSTEM}],
+        "messages": [{"role": "user", "content": f"質問: {q}"}],
+        "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 2}],
+    }
+    try:
+        raw = _post(key, payload).strip()
+    except Exception:
+        return ""
+    if not raw or "NO_MATCH" in raw:
+        return ""
+    return raw
+
+
 def log_gap(q, hits, variants):
     rec = dict(ts=datetime.datetime.now().isoformat(timespec="seconds"), question=q,
                variants=variants[1:],
@@ -402,7 +433,11 @@ def answer(q, idx, deepen_ctx=None, mode_override=""):
     allow_no_material = (not hits) and is_regulatory_topic(q)
     if not hits and not allow_no_material:
         log_gap(q, hits, variants)
-        return ("今は、その問いにきちんとお答えできません。（関連する記事が見つかりませんでした。記録しました。）", None)
+        msg = "今は、その問いにきちんとお答えできません。（関連する記事が見つかりませんでした。記録しました。）"
+        rec = recommend_book(key, q)
+        if rec:
+            msg += f"\n\n参考になりそうな本: {rec}"
+        return (msg, None)
 
     try:
         raw = generate(key, q, hits[:POOL], mode=mode, allow_no_material=allow_no_material)
@@ -411,9 +446,13 @@ def answer(q, idx, deepen_ctx=None, mode_override=""):
 
     if DECLINE_TAG in raw or raw.strip() == DECLINE_TAG.strip("[]"):
         log_gap(q, hits, variants)
-        return ("今は、その問いにきちんとお答えできません。\n"
-                "西川の書いたものの中に、近い考えが十分に見つかりませんでした。\n"
-                "改良したらお知らせします。", None)
+        msg = ("今は、その問いにきちんとお答えできません。\n"
+               "西川の書いたものの中に、近い考えが十分に見つかりませんでした。\n"
+               "改良したらお知らせします。")
+        rec = recommend_book(key, q)
+        if rec:
+            msg += f"\n\n参考になりそうな本: {rec}"
+        return (msg, None)
 
     lv, body = split_level(raw)
     if is_money_topic(q):
