@@ -23,7 +23,7 @@ from flask import Flask, request, jsonify
 
 INDEX_DIR = Path(os.environ.get("INDEX_DIR", str(Path(__file__).resolve().parent / "index_data")))
 INDEX_FILES = ["mini_index_lex.npz", "mini_index_meta.jsonl", "mini_index_vocab.json"]
-RELEASE_BASE = "https://github.com/jun24kawa/nishikawa-qa/releases/download/index-data-v1"
+RELEASE_BASE = "https://github.com/jun24kawa/nishikawa-qa/releases/download/index-data-v2"
 
 
 def ensure_index_files():
@@ -173,6 +173,28 @@ def send_verification_email():
             body_text=EMAIL_TEXT_TMPL.format(yes_url=yes_url, no_url=no_url),
             body_html=EMAIL_HTML_TMPL.format(yes_url=yes_url, no_url=no_url),
         )
+    except Exception as e:
+        return jsonify(error=f"mail send failed: {e}"), 500
+
+    return jsonify(ok=True)
+
+
+@app.route("/send-announcement", methods=["POST"])
+def send_announcement():
+    """西川さんがgapsやasksを見て、個別に「回答をバージョンアップしました」等を知らせるための
+    汎用メール送信（2026-09-20新設）。X-Internal-Keyで保護し、既存のmailer.send_mailをそのまま使う。"""
+    if not check_auth():
+        return jsonify(error="unauthorized"), 401
+
+    data = request.get_json(silent=True) or {}
+    to_addr = (data.get("to") or "").strip()
+    subject = (data.get("subject") or "").strip()
+    body_text = (data.get("body_text") or "").strip()
+    if not (to_addr and subject and body_text):
+        return jsonify(error="to / subject / body_text is required"), 400
+
+    try:
+        mailer.send_mail(to_addr, subject=subject, body_text=body_text)
     except Exception as e:
         return jsonify(error=f"mail send failed: {e}"), 500
 
