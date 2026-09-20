@@ -109,7 +109,10 @@ def ask():
     # あとで西川さんへの本の推薦材料に使う。Renderのローカルファイルへのgapログ
     # （mini_nishikawa_core.log_gap）は、無料プランの再起動で消えてしまうため
     # 当てにできない（2026-09-19判明）。
-    declined = text.startswith("今は、その問いにきちんとお答えできません")
+    # 2026-09-20追加：介護・相続等のバージョンアップ予告メッセージ（一時的措置）も
+    # 同じ扱いにし、D1のgapsに記録されるようにする（西川さんが需要を把握できるように）。
+    declined = (text.startswith("今は、その問いにきちんとお答えできません")
+                or text.startswith("その種の質問にも答えられるようにバージョンアップ予定です"))
 
     return jsonify(answer=text, declined=declined)
 

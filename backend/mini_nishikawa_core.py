@@ -431,7 +431,17 @@ def answer(q, idx, deepen_ctx=None, mode_override=""):
     # 問う質問は、材料ゼロを理由に断らず、web_search 頼りの事実確認ルートに乗せる
     # （2026-09-19、西川さん指示）。それ以外の話題で材料ゼロなら、これまで通り断る。
     allow_no_material = (not hits) and is_regulatory_topic(q)
-    if not hits and not allow_no_material:
+
+    # 【一時的措置・2026-09-20、西川さん指示】介護・相続関連の書籍を約1週間で追加取り込みする
+    # 予定のため、それまでは web_search 頼みの薄い回答を出さず、バージョンアップ予告で待って
+    # もらう。REGULATORY_WORDS該当かつコーパス材料が無い質問はここで打ち切る。
+    # 書籍の取り込みが済んだら、このifブロックを削除し、以前の挙動（web_search特例ルート＝
+    # 直後のgenerate()呼び出しにallow_no_material=Trueで進む）に戻すこと。
+    if allow_no_material:
+        log_gap(q, hits, variants)
+        return ("その種の質問にも答えられるようにバージョンアップ予定です。10日後に再度質問ください。", None)
+
+    if not hits:
         log_gap(q, hits, variants)
         msg = "今は、その問いにきちんとお答えできません。（関連する記事が見つかりませんでした。記録しました。）"
         rec = recommend_book(key, q)
@@ -446,6 +456,10 @@ def answer(q, idx, deepen_ctx=None, mode_override=""):
 
     if DECLINE_TAG in raw or raw.strip() == DECLINE_TAG.strip("[]"):
         log_gap(q, hits, variants)
+        # 上と同じ一時的措置：材料は多少あったが生成側で断られた場合も、制度系の話題なら
+        # バージョンアップ予告にする（西川さん指示の「その種の質問が来たら」を広く適用）。
+        if is_regulatory_topic(q):
+            return ("その種の質問にも答えられるようにバージョンアップ予定です。10日後に再度質問ください。", None)
         msg = ("今は、その問いにきちんとお答えできません。\n"
                "西川の書いたものの中に、近い考えが十分に見つかりませんでした。\n"
                "改良したらお知らせします。")
