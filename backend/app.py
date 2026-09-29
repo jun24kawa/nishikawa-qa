@@ -146,6 +146,7 @@ def notify_owner_if_needed(q):
     try:
         to_addr = os.environ.get("OWNER_EMAIL", "").strip()
         key = mn.get_api_key()
+        print(f"notify_owner: 開始 to設定={bool(to_addr)} key設定={bool(key)}", flush=True)
         if not (to_addr and key):
             return
         payload = {
@@ -163,6 +164,7 @@ def notify_owner_if_needed(q):
                 print(f"notify_owner: JSONを取り出せず。返答冒頭: {raw[:200]!r}", flush=True)
         if d is None:
             return
+        print(f"notify_owner: 判定 applies={d.get('applies')}", flush=True)
         if not d.get("applies"):
             return
         proposal = d.get("proposal", "")
@@ -183,6 +185,7 @@ def notify_owner_if_needed(q):
             "※勝手には登録しません。",
         ])
         mailer.send_mail(to_addr, subject="【ミニ西川】答えられなかった質問（回答案つき）", body_text=body)
+        print("notify_owner: 送信しました", flush=True)
     except Exception as e:
         print(f"notify_owner_if_needed 失敗: {e}", flush=True)
 
