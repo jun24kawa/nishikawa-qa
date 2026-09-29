@@ -114,7 +114,68 @@ def ask():
     declined = (text.startswith("今は、その問いにきちんとお答えできません")
                 or text.startswith("その種の質問にも答えられるようにバージョンアップ予定です"))
 
+    if declined:
+        # 「〇〇になったらどうする？」型など、西川さんご本人に答えていただきたい質問なら、
+        # 提案文を添えて西川さんへメールする（2026-09-29、西川さん指示）。応答は待たせない。
+        threading.Thread(target=notify_owner_if_needed, args=(q,), daemon=True).start()
+
     return jsonify(answer=text, declined=declined)
+
+
+OWNER_NOTICE_SYSTEM = """あなたは、西川純氏（教育学者・上越教育大学名誉教授）の質問応答システムの補佐役です。
+システムが答えられなかった質問を1件渡します。次の2点を判定し、JSONだけを返してください（コードフェンス禁止）。
+
+applies（真偽）: 次のどちらかに当たるなら true。
+ (a)「〇〇になったらどうするか」型（〇〇は回復不可能なことが多い。例：退職後に経済的自由を失ったら、伴侶と死別したら）
+ (b) 取り返しのつかない出来事が起きたときの向き合い方を問う質問
+ 単なる挨拶・操作語（「次を」等）・知識を問う質問・感想は false。
+proposal（文字列）: applies が true のときだけ、西川氏が答えるとしたらの提案文（です・ます調、短く）。空なら ""。
+ 提案文の型（西川氏の考え方）：
+ - まず、〇〇にならない方法を探る方が生産的、と示せるならそう書く（予防優先）。
+ - 取り返しのつかないことは、まず起きたことを認める。取り返そうとしても無駄。
+ - 記録に解決策が無いときは、「解決策はあると思いますか？」と問い、「短期間に完全解決できる方法はないことは理解していますよね」と確認し、
+   「できることを多様で多数やり続けることによって『まし』にするしかありません」と語る。
+ - 慰めで薄めない。突き放さない。
+形式: {"applies": true|false, "proposal": "..."}"""
+
+
+def notify_owner_if_needed(q):
+    """答えられなかった質問が「〇〇になったら型」なら、提案文つきで西川さん（OWNER_EMAIL）へメールする。
+    失敗しても本体機能には影響させない。OWNER_EMAIL はRenderの環境変数（コードに書かない）。"""
+    import json as _json
+    try:
+        to_addr = os.environ.get("OWNER_EMAIL", "").strip()
+        key = mn.get_api_key()
+        if not (to_addr and key):
+            return
+        raw = mn._post(key, {
+            "model": mn.MODEL_GEN, "max_tokens": 900, "output_config": {"effort": "low"},
+            "system": [{"type": "text", "text": OWNER_NOTICE_SYSTEM}],
+            "messages": [{"role": "user", "content": f"質問: {q}"}],
+        })
+        d = _json.loads(raw[raw.index("{"):raw.rindex("}") + 1])
+        if not d.get("applies"):
+            return
+        proposal = d.get("proposal", "")
+        body = "\n".join([
+            "質問応答システムが、次の質問に答えられませんでした。",
+            "「〇〇になったらどうするか」型（または取り返しのつかない出来事）の質問です。",
+            "",
+            "■ 質問",
+            q,
+            "",
+            "■ 提案文（西川さんの考え方の型に沿って、Claudeが作成）",
+            proposal,
+            "",
+            "■ 判断してください",
+            "　A：西川さんご自身が答える（Claude Codeで内容を伝える）",
+            "　B：この提案文を、手本として登録する",
+            "　C：対応しない",
+            "※勝手には登録しません。",
+        ])
+        mailer.send_mail(to_addr, subject="【ミニ西川】答えられなかった質問（回答案つき）", body_text=body)
+    except Exception as e:
+        print(f"notify_owner_if_needed 失敗: {e}", flush=True)
 
 
 EMAIL_TEXT_TMPL = """今、あなたはオンラインゼミ生にのみ公開されている質問応答システムにアクセスしましたか？
