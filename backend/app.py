@@ -148,12 +148,21 @@ def notify_owner_if_needed(q):
         key = mn.get_api_key()
         if not (to_addr and key):
             return
-        raw = mn._post(key, {
+        payload = {
             "model": mn.MODEL_GEN, "max_tokens": 900, "output_config": {"effort": "low"},
             "system": [{"type": "text", "text": OWNER_NOTICE_SYSTEM}],
             "messages": [{"role": "user", "content": f"質問: {q}"}],
-        })
-        d = _json.loads(raw[raw.index("{"):raw.rindex("}") + 1])
+        }
+        d = None
+        for _ in range(2):  # 形式外の返答が来ることがあるので、1回だけやり直す
+            raw = mn._post(key, payload)
+            try:
+                d = _json.loads(raw[raw.index("{"):raw.rindex("}") + 1])
+                break
+            except ValueError:
+                print(f"notify_owner: JSONを取り出せず。返答冒頭: {raw[:200]!r}", flush=True)
+        if d is None:
+            return
         if not d.get("applies"):
             return
         proposal = d.get("proposal", "")
