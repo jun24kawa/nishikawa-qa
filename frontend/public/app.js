@@ -2,7 +2,7 @@
   "use strict";
 
   const POLL_INTERVAL_MS = 4000;
-  const WAITING_TIMEOUT_MS = 15 * 60 * 1000; // 15分でポーリングをあきらめる
+  const WAITING_TIMEOUT_MS = 30 * 60 * 1000; // 30分でポーリングをあきらめる（メールの確認期限30分と合わせる）
   const ASK_POLL_INTERVAL_MS = 3000;
   const CONTINUE_MARK = "この先を知りたければ「次を」とだけ送ってください。";
 

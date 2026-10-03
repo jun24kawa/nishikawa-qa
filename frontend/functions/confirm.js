@@ -38,7 +38,7 @@ export async function onRequestGet(context) {
     return page("この確認リンクは無効です", "リンクが正しくないか、すでに処理されています。");
   }
   if (row.status !== "pending") {
-    return page("この確認リンクはすでに使われています", "このメールは破棄していただいて結構です。");
+    return page("この確認リンクはすでに使われています", "すでに「はい」を押された場合は、最初にメールアドレスを入力した画面をご覧ください。その画面が自動で切り替わります。その画面を閉じてしまった場合は、お手数ですが、最初からやり直してください。このメールは破棄していただいて結構です。");
   }
   if (new Date(row.confirm_expires_at).getTime() < Date.now()) {
     await env.DB.prepare(`UPDATE sessions SET status = 'expired' WHERE id = ?`).bind(row.id).run();
@@ -50,7 +50,7 @@ export async function onRequestGet(context) {
     await env.DB.prepare(
       `UPDATE sessions SET status = 'confirmed', confirmed_at = datetime('now'), session_expires_at = ? WHERE id = ?`
     ).bind(sessionExpires.toISOString(), row.id).run();
-    return page("確認しました", "元の画面（質問応答システムにアクセスした画面）でご利用いただけます。このメールは破棄していただいて結構です。");
+    return page("確認しました", "この画面は、閉じて構いません。最初にメールアドレスを入力した画面に戻ってください。その画面が、自動で質問画面に切り替わります。その画面を閉じてしまった場合は、お手数ですが、最初からやり直してください。このメールは破棄していただいて結構です。");
   } else {
     await env.DB.prepare(`UPDATE sessions SET status = 'denied' WHERE id = ?`).bind(row.id).run();
     return page("承知しました", "このメールは破棄していただいて結構です。心当たりのないメールが届いた場合は、念のためご注意ください。");
